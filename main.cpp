@@ -6,11 +6,11 @@
 
 #include <chrono>
 #include <iostream>
-#include <queue>
+#include <list>
 
 enum BaseColors{BLACK,GRAY,YELLOW,PURPLE,RED};
 
-glm::u8vec4 BaseColorValues[5] = {glm::u8vec4(0x3f, 0x3f, 0x3f, 0xff),glm::u8vec4(0xf2, 0xf2, 0xf2, 0xff),glm::u8vec4(0xff, 0xd9, 0x1e, 0xff),glm::u8vec4(0xaa, 0x61, 0xce, 0xff),glm::u8vec4(0xe7, 0x59, 0x26, 0xff)};
+glm::u8vec4 BaseColorValues[5] = {glm::u8vec4(0x1f, 0x1f, 0x1f, 0xff),glm::u8vec4(0xf2, 0xf2, 0xf2, 0xff),glm::u8vec4(0xff, 0xd9, 0x1e, 0xff),glm::u8vec4(0xaa, 0x61, 0xce, 0xff),glm::u8vec4(0xe7, 0x59, 0x26, 0xff)};
 
 class Base{
     public:
@@ -19,14 +19,44 @@ class Base{
         glm::u8vec4 base_color_val;
 };
 
+class Missile{
+    public:
+        float x1 = 0.0f;
+        float y1 = 0.0f;
+        float x2 = 0.1f;
+        float y2 = 0.07f;
+        glm::vec2 position;
+        glm::vec2 velocity;
+        BaseColors missile_color;
+        glm::u8vec4 missile_color_val;
+};
 
+std::list<Missile> missiles;
+bool game_over_flag = false;
+float randVelocities[] = {-0.8,0.8};
+
+Uint32 spawn_missile(Uint32 interval, void *param){
+    
+    
+    int colorIndex = rand() % 5;
+    
+    float randX = (rand()%19 - 9);
+    float XVel = randVelocities[rand()%2];
+    
+    
+    
+    Missile m;
+    m.position = glm::vec2(randX/10, 1.0f);
+    m.velocity = glm::vec2(XVel, -0.8f);
+    m.missile_color = (BaseColors) colorIndex;
+    m.missile_color_val = BaseColorValues[colorIndex];
+    
+    missiles.push_back(m);
+    
+    return interval;
+}
 
 int main(int argc, char **argv) {
-    
-    std::queue<int> missiles;
-    missiles.push(1);
-    
-    std::cout << missiles.front();
     
 	//Configuration:
 	struct {
@@ -99,8 +129,8 @@ int main(int argc, char **argv) {
 	//------------  game state ------------
 
 	glm::vec2 mouse = glm::vec2(0.0f, 0.0f);
-	glm::vec2 ball = glm::vec2(0.0f, 0.0f);
-	glm::vec2 ball_velocity = glm::vec2(0.9f, -0.9f);
+//	glm::vec2 ball = glm::vec2(0.0f, 0.8f);
+//	glm::vec2 ball_velocity = glm::vec2(0.9f, -0.9f);
     
     const glm::vec2 start_pos = glm::vec2(-3.0f,-1.0f);
     float init_base_height = -0.55f;
@@ -124,7 +154,11 @@ int main(int argc, char **argv) {
     }
      //----------- Create Base Units ---------END
         
-        
+    
+    //------------Spawn Missiles--------------------
+    Uint32 missile_delay = 1750;  /* To round it down to the nearest 10 ms */
+    SDL_TimerID missile_timer = SDL_AddTimer(missile_delay, spawn_missile, NULL);
+    
 
 	//------------  game loop ------------
 
@@ -159,34 +193,69 @@ int main(int argc, char **argv) {
 		previous_time = current_time;
 
 		{ //update game state:
-			ball += elapsed * ball_velocity;
-			if (ball.x < -1.0f) ball_velocity.x = std::abs(ball_velocity.x);
-			if (ball.x >  1.0f) ball_velocity.x =-std::abs(ball_velocity.x);
-			if (ball.y < -1.0f) ball_velocity.y = std::abs(ball_velocity.y);
-			if (ball.y >  1.0f) ball_velocity.y =-std::abs(ball_velocity.y);
+            if(game_over_flag==false){
+                std::list<Missile>::iterator m;
+                for (m = missiles.begin(); m != missiles.end(); m++){
+                    m->position += elapsed * m->velocity;
+                
+                    if (m->position.x < -1.0f) m->velocity.x = std::abs(m->velocity.x);
+                    if (m->position.x >  1.0f) m->velocity.x =-std::abs(m->velocity.x);
+                
+                    if (m->position.y >  1.0f) m->velocity.y =-std::abs(m->velocity.y);
+                
+                    //Check for collision
+                    for(int i=0;i<numUnits;i++){
+                        if (m->position.y <  baseUnits[i].y2){
+                            if(m->position.x >= (mouse.x+baseUnits[i].x1)
+                               && m->position.x <= (mouse.x+baseUnits[i].x2)){
+                                
+                                //Wrong catch
+                                if(m->missile_color!=baseUnits[i].base_color){
+                                    missiles.pop_front();
+                                    baseUnits[i].y2 -= 0.15;
+                                }
+                                else{
+                                    missiles.pop_front();
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (m->position.y < -1.0f) {
+                        game_over_flag = true;
+                        SDL_RemoveTimer(missile_timer);
+                    }
+                }
+            }
 		}
 
 		//draw output:
-		glClearColor(1,1,1,1);
-		glClear(GL_COLOR_BUFFER_BIT);
+        
+        glClearColor(0.2,0.2,0.2,0.2);
+        glClear(GL_COLOR_BUFFER_BIT);
+        
 
 
 		{ //draw game state:
-			Draw draw;
+            if(game_over_flag==false){
+                Draw draw;
             
-            for(int i=0;i<numUnits;i++){
-                draw.add_rectangle(mouse+glm::vec2(baseUnits[i].x1,baseUnits[i].y1),mouse+glm::vec2(baseUnits[i].x2,baseUnits[i].y2),baseUnits[i].base_color_val);
+                // Draw base
+                for(int i=0;i<numUnits;i++){
+                    draw.add_rectangle(mouse+glm::vec2(baseUnits[i].x1,baseUnits[i].y1),mouse+glm::vec2(baseUnits[i].x2,baseUnits[i].y2),baseUnits[i].base_color_val);
+                }
+            
+            
+                //Draw Missiles
+                for (std::list<Missile>::iterator m = missiles.begin(); m != missiles.end(); m++){
+                    draw.add_rectangle(m->position + glm::vec2(m->x1,m->y1), m->position + glm::vec2(m->x2, m->y2), m->missile_color_val);
+                }
+                draw.draw();
             }
-//			draw.add_rectangle(glm::vec2(-1.0f,-1.0f), glm::vec2(-0.5f,-0.55f), glm::u8vec4(0x3f, 0x3f, 0x3f, 0xff));
-//            draw.add_rectangle(glm::vec2(-0.5f,-1.0f), glm::vec2(0.0f,-0.55f), glm::u8vec4(0xf2, 0xf2, 0xf2, 0xff));
-//            draw.add_rectangle(glm::vec2(0.0f,-1.0f), glm::vec2(0.5f,-0.55f), glm::u8vec4(0xff, 0xd9, 0x1e, 0xff));
-//            draw.add_rectangle(glm::vec2(0.5f,-1.0f), glm::vec2(1.0f,-0.55f), glm::u8vec4(0xaa, 0x61, 0xce, 0xff));
-            draw.add_rectangle(ball + glm::vec2(-0.04f,-0.04f), ball + glm::vec2(0.07f, 0.04f), glm::u8vec4(0xff, 0x00, 0xff, 0xff));
-			draw.draw();
 		}
 
-
-		SDL_GL_SwapWindow(window);
+        
+        SDL_GL_SwapWindow(window);
 	}
 
 
