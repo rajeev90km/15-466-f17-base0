@@ -32,8 +32,9 @@ class Missile{
 };
 
 std::list<Missile> missiles;
-bool game_over_flag = false;
+bool game_over_flag = true;
 float randVelocities[] = {-0.8,0.8};
+int score = 0;
 
 Uint32 spawn_missile(Uint32 interval, void *param){
     
@@ -152,7 +153,6 @@ int main(int argc, char **argv) {
             baseUnits[i].base_color_val = BaseColorValues[baseUnits[i].base_color];
         }
     }
-     //----------- Create Base Units ---------END
         
     
     //------------Spawn Missiles--------------------
@@ -173,9 +173,11 @@ int main(int argc, char **argv) {
                     mouse.x = (evt.motion.x) / float(config.size.x) * 3.0f - 1.0f;
                     mouse.y = 0.0f;
             }
-//            if (evt.type == SDL_MOUSEBUTTONDOWN) {
-//                mouse_pressed = true;
-//			}
+            if (evt.type == SDL_MOUSEBUTTONDOWN) {
+                if(game_over_flag==true){
+                    game_over_flag = false;
+                }
+			}
 //            else if(evt.type == SDL_MOUSEBUTTONUP){
 //                mouse_pressed = false;
 //            }
@@ -206,16 +208,28 @@ int main(int argc, char **argv) {
                     //Check for collision
                     for(int i=0;i<numUnits;i++){
                         if (m->position.y <  baseUnits[i].y2){
-                            if(m->position.x >= (mouse.x+baseUnits[i].x1)
-                               && m->position.x <= (mouse.x+baseUnits[i].x2)){
+                            if(
+                               (m->position.x >= (mouse.x+baseUnits[i].x1)
+                               && m->position.x <= (mouse.x+baseUnits[i].x2)) ||
+                               (m->position.x+m->x2 >= (mouse.x+baseUnits[i].x1) &&
+                                m->position.x+m->x2 <= (mouse.x+baseUnits[i].x2))
+                               ){
                                 
                                 //Wrong catch
                                 if(m->missile_color!=baseUnits[i].base_color){
                                     missiles.pop_front();
                                     baseUnits[i].y2 -= 0.15;
+                                    break;
                                 }
                                 else{
                                     missiles.pop_front();
+                                    score+=1;
+                                    if(score%15==0){
+                                        missile_delay -= 100;
+                                        SDL_RemoveTimer(missile_timer);
+                                        missile_timer = SDL_AddTimer(missile_delay, spawn_missile, NULL);
+                                    }
+                                    break;
                                 }
                             }
                         }
@@ -230,7 +244,8 @@ int main(int argc, char **argv) {
 		}
 
 		//draw output:
-        
+
+//        glClearColor(1,1,1,1);
         glClearColor(0.2,0.2,0.2,0.2);
         glClear(GL_COLOR_BUFFER_BIT);
         
